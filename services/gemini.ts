@@ -2,7 +2,6 @@ import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
 const getAIClient = () => {
-  // এখানে আপনার সঠিক এপিআই কি সরাসরি বসিয়ে দিয়েছি
   return new GoogleGenAI({ apiKey: "AIzaSyBBkucffqYgVOsg2Q5Q-bKQEbB3XFk9Z-U" });
 };
 
@@ -30,7 +29,7 @@ export const generateAIResponse = async (
     contents.push({ role: 'user', parts: currentParts });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash', // আমরা ফ্ল্যাশ ১.৫ ব্যবহার করছি যাতে দ্রুত রেসপন্স আসে
+      model: 'gemini-1.5-flash',
       contents,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION + memoryContext,
@@ -38,7 +37,8 @@ export const generateAIResponse = async (
       },
     });
 
-    const text = response.text || "";
+    const text = response.text || (response.candidates && response.candidates[0]?.content?.parts[0]?.text) || "";
+    
     return { text, sources: [] };
   } catch (error) {
     console.error(error);
@@ -47,9 +47,9 @@ export const generateAIResponse = async (
 };
 
 export const generateImage = async (prompt: string) => {
-  throw new Error("Image generation models are currently limited.");
+  throw new Error("Disabled");
 };
 
 export const generateVideo = async (prompt: string) => {
-  throw new Error("Video generation is not available in this tier.");
+  throw new Error("Disabled");
 };
