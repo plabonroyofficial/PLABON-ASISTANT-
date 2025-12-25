@@ -1,11 +1,8 @@
-
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
-const API_KEY = "AIzaSyBBkucffqYgVOsg2Q5Q-bKQEbB3XFk9Z-U";
-
 const getAIClient = () => {
-  return new GoogleGenerativeAI(API_KEY);
+  return new GoogleGenAI({ apiKey: "AIzaSyBBkucffqYgVOsg2Q5Q-bKQEbB3XFk9Z-U" });
 };
 
 export const generateAIResponse = async (
@@ -14,11 +11,10 @@ export const generateAIResponse = async (
   userPreferences: string[] = [],
   imageData?: string 
 ) => {
-  const genAI = getAIClient();
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    systemInstruction: SYSTEM_INSTRUCTION + (userPreferences.length > 0 ? `\n[USER MEMORY]: ${userPreferences.join(", ")}` : "")
-  });
+  const ai = getAIClient();
+  const memoryContext = userPreferences.length > 0 
+    ? `\n[USER MEMORY]: ${userPreferences.join(", ")}`
+    : "";
 
   try {
     const contents: any[] = [...history];
@@ -32,11 +28,22 @@ export const generateAIResponse = async (
 
     contents.push({ role: 'user', parts: currentParts });
 
-    const result = await model.generateContent({ contents });
-    const response = await result.response;
-    const text = response.text() || "";
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION + memoryContext,
+        temperature: 0.7,
+        tools: [{ googleSearch: {} }] as any,
+      },
+    });
 
-    return { text, sources: [] };
+    const text = response.text || "";
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
+      ?.filter((chunk: any) => chunk.web)
+      ?.map((chunk: any) => ({ title: chunk.web.title, uri: chunk.web.uri }));
+
+    return { text, sources };
   } catch (error) {
     console.error(error);
     throw error;
@@ -44,9 +51,41 @@ export const generateAIResponse = async (
 };
 
 export const generateImage = async (prompt: string) => {
-  throw new Error("Image generation models are restricted to specific regions or tiers.");
+  const ai = getAIClient();
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash-image',
+    contents: { parts: [{ text: prompt }] },
+    config: { imageConfig: { aspectRatio: "1:1" } }
+  });
+
+  for (const part of response.candidates[0].content.parts) {
+    if (part.inlineData) {
+      return `data:image/png;base64,${part.inlineData.data}`;
+    }
+  }
+  throw new Error("Failed to generate image");
 };
 
 export const generateVideo = async (prompt: string) => {
-  throw new Error("Video generation models are restricted to specific regions or tiers.");
+  const ai = new GoogleGenAI({ apiKey: "AIzaSyBBkucffqYgVOsg2Q5Q-bKQEbB3XFk9Z-U" });
+  
+  let operation = await ai.models.generateVideos({
+    model: 'veo-3.1-fast-generate-preview',
+    prompt,
+    config: { 
+      numberOfVideos: 1, 
+      resolution: '720p', 
+      aspectRatio: '16:9' 
+    }
+  });
+
+  while (!operation.done) {
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    operation = await ai.operations.getVideosOperation({ operation: operation });
+  }
+
+  const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+  if (!downloadLink) throw new Error("No download link received");
+  
+  return `${downloadLink}&key=AIzaSyBBkucffqYgVOsg2Q5Q-bKQEbB3XFk9Z-U`;
 };
