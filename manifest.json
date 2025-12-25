@@ -1,0 +1,21 @@
+
+{
+  "short_name": "Plabon AI",
+  "name": "PLABON ASSISTANT",
+  "icons": [
+    {
+      "src": "https://r2.erweima.ai/i/6f9P8y1pTyS9D3r5V7D1Xw.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://r2.erweima.ai/i/6f9P8y1pTyS9D3r5V7D1Xw.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#4f46e5",
+  "background_color": "#f8fafc"
+}
