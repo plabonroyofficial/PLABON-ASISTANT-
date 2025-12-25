@@ -1,0 +1,9 @@
+{
+  "name": "PLABON ASSISTANT",
+  "description": "Premium AI Assistant with Image/Video generation and Live Voice capabilities.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
