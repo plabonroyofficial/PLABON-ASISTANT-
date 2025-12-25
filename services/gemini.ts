@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
 const getAIClient = () => {
+  // এখানে আপনার সঠিক এপিআই কি সরাসরি বসিয়ে দিয়েছি
   return new GoogleGenAI({ apiKey: "AIzaSyBBkucffqYgVOsg2Q5Q-bKQEbB3XFk9Z-U" });
 };
 
@@ -29,21 +30,16 @@ export const generateAIResponse = async (
     contents.push({ role: 'user', parts: currentParts });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash', // আমরা ফ্ল্যাশ ১.৫ ব্যবহার করছি যাতে দ্রুত রেসপন্স আসে
       contents,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION + memoryContext,
         temperature: 0.7,
-        tools: [{ googleSearch: {} }] as any,
       },
     });
 
     const text = response.text || "";
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
-      ?.filter((chunk: any) => chunk.web)
-      ?.map((chunk: any) => ({ title: chunk.web.title, uri: chunk.web.uri }));
-
-    return { text, sources };
+    return { text, sources: [] };
   } catch (error) {
     console.error(error);
     throw error;
@@ -51,41 +47,9 @@ export const generateAIResponse = async (
 };
 
 export const generateImage = async (prompt: string) => {
-  const ai = getAIClient();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: { parts: [{ text: prompt }] },
-    config: { imageConfig: { aspectRatio: "1:1" } }
-  });
-
-  for (const part of response.candidates[0].content.parts) {
-    if (part.inlineData) {
-      return `data:image/png;base64,${part.inlineData.data}`;
-    }
-  }
-  throw new Error("Failed to generate image");
+  throw new Error("Image generation models are currently limited.");
 };
 
 export const generateVideo = async (prompt: string) => {
-  const ai = new GoogleGenAI({ apiKey: "AIzaSyBBkucffqYgVOsg2Q5Q-bKQEbB3XFk9Z-U" });
-  
-  let operation = await ai.models.generateVideos({
-    model: 'veo-3.1-fast-generate-preview',
-    prompt,
-    config: { 
-      numberOfVideos: 1, 
-      resolution: '720p', 
-      aspectRatio: '16:9' 
-    }
-  });
-
-  while (!operation.done) {
-    await new Promise(resolve => setTimeout(resolve, 10000));
-    operation = await ai.operations.getVideosOperation({ operation: operation });
-  }
-
-  const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-  if (!downloadLink) throw new Error("No download link received");
-  
-  return `${downloadLink}&key=AIzaSyBBkucffqYgVOsg2Q5Q-bKQEbB3XFk9Z-U`;
+  throw new Error("Video generation is not available in this tier.");
 };
