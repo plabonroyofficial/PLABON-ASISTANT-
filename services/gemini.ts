@@ -2,92 +2,107 @@
 import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
+// Create AI client
 const getAIClient = () => {
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY is missing in environment variables");
+  }
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
+// =========================
+// TEXT + IMAGE CHAT
+// =========================
 export const generateAIResponse = async (
   prompt: string,
-  history: { role: 'user' | 'model'; parts: { text: string }[] }[],
+  history: { role: "user" | "model"; parts: { text: string }[] }[] = [],
   userPreferences: string[] = [],
-  imageData?: string 
+  imageData?: string
 ) => {
-  const ai = getAIClient();
-  const memoryContext = userPreferences.length > 0 
-    ? `\n[USER MEMORY]: ${userPreferences.join(", ")}`
-    : "";
-
   try {
-    const contents: any[] = [...history];
-    const currentParts: any[] = [{ text: prompt }];
-    
+    const ai = getAIClient();
+
+    const memoryContext =
+      userPreferences.length > 0
+        ? `\n[USER MEMORY]: ${userPreferences.join(", ")}`
+        : "";
+
+    const parts: any[] = [{ text: prompt }];
+
     if (imageData) {
-      currentParts.push({
-        inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] || imageData }
+      const base64 = imageData.includes(",")
+        ? imageData.split(",")[1]
+        : imageData;
+
+      parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: base64,
+        },
       });
     }
 
-    contents.push({ role: 'user', parts: currentParts });
+    const contents = [
+      {
+        role: "model",
+        parts: [{ text: SYSTEM_INSTRUCTION + memoryContext }],
+      },
+      ...history,
+      {
+        role: "user",
+        parts,
+      },
+    ];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: "gemini-1.5-flash",
       contents,
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION + memoryContext,
         temperature: 0.7,
-        tools: [{ googleSearch: {} }] as any,
       },
     });
 
-    const text = response.text || "";
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
-      ?.filter((chunk: any) => chunk.web)
-      ?.map((chunk: any) => ({ title: chunk.web.title, uri: chunk.web.uri }));
+    const text =
+      response.candidates?.[0]?.content?.parts
+        ?.map((p: any) => p.text || "")
+        .join("") || "";
 
-    return { text, sources };
+    return {
+      text,
+      raw: response,
+    };
   } catch (error) {
-    console.error(error);
+    console.error("Gemini text error:", error);
     throw error;
   }
 };
 
+// =========================
+// IMAGE GENERATION
+// =========================
 export const generateImage = async (prompt: string) => {
-  const ai = getAIClient();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: { parts: [{ text: prompt }] },
-    config: { imageConfig: { aspectRatio: "1:1" } }
-  });
+  try {
+    const ai = getAIClient();
 
-  for (const part of response.candidates[0].content.parts) {
-    if (part.inlineData) {
-      return `data:image/png;base64,${part.inlineData.data}`;
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        responseModalities: ["IMAGE"],
+      },
+    });
+
+    const parts = response.candidates?.[0]?.content?.parts || [];
+
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
     }
+
+    throw new Error("No image generated");
+  } catch (error) {
+    console.error("Gemini image error:", error);
+    throw error;
   }
-  throw new Error("Failed to generate image");
-};
-
-export const generateVideo = async (prompt: string) => {
-  // Always create a new instance to get the latest key from process.env.API_KEY
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  let operation = await ai.models.generateVideos({
-    model: 'veo-3.1-fast-generate-preview',
-    prompt,
-    config: { 
-      numberOfVideos: 1, 
-      resolution: '720p', 
-      aspectRatio: '16:9' 
-    }
-  });
-
-  while (!operation.done) {
-    await new Promise(resolve => setTimeout(resolve, 10000));
-    operation = await ai.operations.getVideosOperation({ operation: operation });
-  }
-
-  const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-  if (!downloadLink) throw new Error("No download link received");
-  
-  return `${downloadLink}&key=${process.env.API_KEY}`;
 };
